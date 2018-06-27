@@ -443,7 +443,7 @@ static int pmc_vep_init_module(void)
         }
     }
 
-    printk("EXIT: dma_init_module success\n");
+    printk("EXIT: spc_init_module success\n");
     return 0;   /* succeed */
 }
 
