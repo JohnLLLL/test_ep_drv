@@ -10,9 +10,9 @@ ccflags-y += -I$(LDDINC) -I../common
 ifneq ($(KERNELRELEASE),)
 # call from kernel build system
 
-dma_test_drv-objs := dma_test_drv.o 
+dma_drv-objs := dma_test_drv.o 
 
-obj-m	:= dma_test_drv.o
+obj-m	:= dma_drv.o
 
 else
 
