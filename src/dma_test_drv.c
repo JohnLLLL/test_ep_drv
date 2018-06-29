@@ -11,6 +11,7 @@ typedef struct bar_resources{
 
 
 typedef struct vep_dev_strcut{
+    unsigned char init;
 	bar_rsc bar[6];
 	struct pci_dev *pci_dev;
 }vep_dev;
@@ -19,38 +20,9 @@ vep_dev g_dev;
 struct msix_entry msix_entries[] =
     {{0, 0}, {0, 1}, {0, 2}, {0, 3}};
 
-int vep_nr = 0;
-
 dev_t	chr_dev;
 
 unsigned int __attribute__((aligned(4))) buf_4k[ 1024 ];
-
-//void wr_vep(void * dest, size_t len)
-//{
-//    size_t i;
-//    unsigned int dwDest = (unsigned int*)dest;
-//    loff_t dwOff = off/4;
-//    size_t dwLen = len/4;
-//
-//    for( i = 0; i < dwLen; i++ )
-//    {
-//        dwDest[i] = buf_4k[i];
-//    }
-//}
-//
-//void rd_vep(void * dest, loff_t off, size_t len)
-//{
-//    size_t i;
-//    unsigned int dwDest = (unsigned int*)dest;
-//    loff_t dwOff = off/4;
-//    size_t dwLen = len/4;
-//
-//    for( i = 0; i < dwLen; i++ )
-//    {
-//        buf_4k[i] = dwDest[i];
-//    }
-//}
-
 
 
 int pmc_vep_open(struct inode *inode, struct file *filp)
@@ -94,8 +66,6 @@ static ssize_t pmc_vep_read(struct file* pfile, char * p, size_t size, loff_t* o
     p_bar = pfile->private_data;
 
 	printk(KERN_DEBUG "read vep@BAR%ld: offset=0x%llx, size=0x%lx\n",(p_bar - g_dev.bar), pfile->f_pos, (long unsigned int)size);
-
-//	copy_to_user(p, (void*)(p_bar->bar_virtual + pfile->f_pos), size);
 
 	if ( offset & 0x3 )
     {
@@ -162,8 +132,6 @@ static ssize_t pmc_vep_write(struct file* pfile, const char * p, size_t size, lo
     p_bar = pfile->private_data;
 
 	printk(KERN_DEBUG "write vep@BAR%ld: offset=0x%llx, size=0x%lx\n",(p_bar - g_dev.bar), pfile->f_pos, (long unsigned int)size);
-
-//	copy_from_user((void*)(p_bar->bar_virtual + pfile->f_pos) , p, size);
 
 	if ( offset & 0x3 )
     {
@@ -262,7 +230,7 @@ static loff_t pmc_vep_llseek(struct file *filp, loff_t off, int whence)
 }
 
 
-struct file_operations spc_fops = {
+struct file_operations __fops = {
     .owner =    THIS_MODULE,
     .read =     pmc_vep_read,
     .write =    pmc_vep_write,
@@ -271,6 +239,7 @@ struct file_operations spc_fops = {
     .release =  pmc_vep_release,
 };
 
+#if 0
 irqreturn_t pmc_vep_isr(int irq, void *dev_id)
 {
 
@@ -278,6 +247,7 @@ irqreturn_t pmc_vep_isr(int irq, void *dev_id)
 
     return IRQ_HANDLED;
 }
+#endif
 
 static void *remap_pci_mem(ulong base, ulong size)
 {
@@ -290,32 +260,21 @@ static void *remap_pci_mem(ulong base, ulong size)
 
 static int pmc_vep_init_module(void)
 {
-    int i,ret;
+    int i,ret, bar_nr;
     struct pci_dev * pci_dev;
-    printk("ENTER: pmc_vep_init_module()\n");
+    printk(KERN_DEBUG "JohnLu:pmc_vep_init_module()\n");
 
     /*Search all the vEP device*/
-    pci_dev = NULL;
-
-    vep_nr = 0;
-
+    g_dev.init = 0;
+    g_dev.pci_dev = NULL;
     while( (pci_dev = pci_get_device(0x11F8, 0xbeef, pci_dev)) && pci_dev )
     {
-    	if(pci_dev->class != 0x068000)
-    	{
-            printk(KERN_DEBUG "Not the ep\n");
-    		continue;
-    	}
-
-        if (pci_enable_device(pci_dev))
+        if(pci_dev->class != 0x058000)
         {
-            printk(KERN_DEBUG "Unable to Enable PCI device\n");
-            printk(KERN_DEBUG "EXIT pmc_vep_init_module()\n");
-            return 3;
+            printk(KERN_DEBUG "JohnLu:Not matched class\n");
+            continue;
         }
-
-        pci_set_master(pci_dev);
-
+        g_dev.pci_dev = pci_dev;
 #if 0
         if (pci_find_capability (pci_dev, PCI_CAP_ID_MSIX))
         {
@@ -348,7 +307,8 @@ static int pmc_vep_init_module(void)
                 }
             }
         }
-#else
+#endif
+#if 0
         if (pci_find_capability (pci_dev, PCI_CAP_ID_MSI))
         {
             printk("PCI capability [MSI]\n");
@@ -381,104 +341,112 @@ static int pmc_vep_init_module(void)
             }
         }
 #endif
-        g_dev.pci_dev = pci_dev;
+        break;
+    }
 
-        /* BAR resources */
+    if (g_dev.pci_dev)
+    {
+        if (pci_enable_device(pci_dev))
+        {
+            printk(KERN_DEBUG "JohnLu:Unable to Enable PCI device\n");
+            goto error_hdlr;
+        }
+
+        pci_set_master(pci_dev);
+
+        bar_nr =0 ;
+        /* Initialize the BAR accessing*/
         for(i = 0; i < 6; i++)
         {
             if ((g_dev.bar[i].bar_size = pci_resource_len(pci_dev,i)))
             {
-                    g_dev.bar[i].bar_phys = pci_resource_start(pci_dev, i);
-                    g_dev.bar[i].bar_virtual = (unsigned long)remap_pci_mem(g_dev.bar[i].bar_phys, g_dev.bar[i].bar_size);
-                    printk(KERN_DEBUG "init vep@BAR%d: phys=0x%lx, size=0x%lx, virtual=0x%lx\n", i, g_dev.bar[i].bar_phys,
-                                                g_dev.bar[i].bar_size,
-                                                g_dev.bar[i].bar_virtual);
-                    vep_nr++;
+                g_dev.bar[i].bar_phys = pci_resource_start(pci_dev, i);
+                g_dev.bar[i].bar_virtual = (unsigned long)remap_pci_mem(g_dev.bar[i].bar_phys, g_dev.bar[i].bar_size);
+                printk(KERN_DEBUG "JohnLu: vep BAR%d - phys=0x%lx, size=0x%lx @ virtual=0x%lx\n", i, g_dev.bar[i].bar_phys,
+                                            g_dev.bar[i].bar_size,
+                                            g_dev.bar[i].bar_virtual);
+                bar_nr++;
             }
-
         }
 
-
-        break;
-    }
-
-
-    printk(KERN_DEBUG "VEP BAR count: %d\n",vep_nr);
-
-    if(!vep_nr)
-    {
-        printk(KERN_DEBUG "No pmc ep\n");
-        printk(KERN_DEBUG "EXIT pmc_vep_init_module()\n");
-    	return 1;
-    }
-
-
-    /* create and register char device */
-    ret = alloc_chrdev_region(&chr_dev, 0, vep_nr, "pmcvep");
-
-    if (ret < 0)
-    {
-        printk(KERN_DEBUG "FAIL: register_chrdev_region\n");
-        printk(KERN_DEBUG "EXIT pmc_vep_init_module()\n");
-        return ret;
-    }
-
-    for(i = 0; i < 6; i++)
-    {
-        if(g_dev.bar[i].bar_size)
+        printk(KERN_DEBUG "JohnLu: vep BAR count: %d\n", bar_nr);
+        /* create and register char device */
+        ret = alloc_chrdev_region(&chr_dev, 0, bar_nr, "pmcvep");
+        if (ret < 0)
         {
-            cdev_init(&(g_dev.bar[i].pmc_cdev),&spc_fops);
-
-            g_dev.bar[i].pmc_cdev.owner = THIS_MODULE;
-
-            printk(KERN_DEBUG "Add cdev major num %x, minor num %x, devt %x \n", chr_dev, i, MKDEV(MAJOR(chr_dev), i));
-
-            ret = cdev_add (&(g_dev.bar[i].pmc_cdev), MKDEV(MAJOR(chr_dev), i), 1);
-
-            if (ret != 0)
+            printk(KERN_DEBUG "FAIL: register_chrdev_region\n");
+            goto error_hdlr;
+        }
+        for(i = 0; i < 6; i++)
+        {
+            if(g_dev.bar[i].bar_size)
             {
-                printk("FAIL: cdev_add[%d]", ret);
-                return ret;
+                cdev_init(&(g_dev.bar[i].pmc_cdev),&__fops);
+
+                g_dev.bar[i].pmc_cdev.owner = THIS_MODULE;
+
+                printk(KERN_DEBUG "Add cdev major num %x, minor num %x, devt %x \n", chr_dev, i, MKDEV(MAJOR(chr_dev), i));
+
+                ret = cdev_add (&(g_dev.bar[i].pmc_cdev), MKDEV(MAJOR(chr_dev), i), 1);
+
+                if (ret < 0)
+                {
+                    printk("FAIL: cdev_add[%d]", ret);
+                    goto error_hdlr;
+                }
             }
         }
+        g_dev.init = 1;
     }
 
-    printk("EXIT: spc_init_module success\n");
+    printk("JohnLu: pmc_vep_init_module success\n");
     return 0;   /* succeed */
+error_hdlr:
+
+    printk("JohnLu: pmc_vep_init_module fail\n");
+    return -1;   /* fail */
 }
 
-static void spc_exit_module(void)
+static void pmc_vep_exit_module(void)
 {
-    int i;
+    int i, bar_nr;
 
-    unregister_chrdev_region(chr_dev,vep_nr);
-
-    for(i = 0; i < vep_nr; i++)
+    printk("JohnLu: pmc_vep_exit_module()\n");
+    if (g_dev.init == 1)
     {
-        if (g_dev.bar[i].bar_size)
+        for(i = 0; i < 6; i++)
         {
-            cdev_del(&(g_dev.bar[i].pmc_cdev));
-            iounmap(g_dev.bar[i].bar_virtual);
+            if (g_dev.bar[i].bar_size)
+            {
+                cdev_del(&(g_dev.bar[i].pmc_cdev));
+                iounmap(g_dev.bar[i].bar_virtual);
+                bar_nr++;
+            }
         }
+
+        unregister_chrdev_region(chr_dev,bar_nr);
+
+#if 0
+        for(i = 0; i < VEP_INT_NUM; i++)
+        {
+            /* free an interrupt line */
+            free_irq(msix_entries[i].vector, &g_dev);
+        }
+
+        pci_disable_msix(g_dev.pci_dev);
+#endif
+
+        pci_clear_master(g_dev.pci_dev);
+
+        pci_disable_device(g_dev.pci_dev);
     }
 
-    for(i = 0; i < VEP_INT_NUM; i++)
-    {
-        /* free an interrupt line */
-        free_irq(msix_entries[i].vector, &g_dev);
-    }
-
-    pci_disable_msix(g_dev.pci_dev);
-
-    pci_clear_master(g_dev.pci_dev);
-
-    printk("ENTER: spc_exit_module\n");
-    printk("EXIT: spc_exit_module\n");
+    printk("JohnLu: pmc_vep_exit_module success\n");
 
     return;
 }
 
 
 module_init(pmc_vep_init_module);
-module_exit(spc_exit_module);
+module_exit(pmc_vep_exit_module);
 
