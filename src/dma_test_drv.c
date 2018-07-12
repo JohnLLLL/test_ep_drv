@@ -267,6 +267,7 @@ static int pmc_vep_init_module(void)
     /*Search all the vEP device*/
     g_dev.init = 0;
     g_dev.pci_dev = NULL;
+    pci_dev = NULL;
     while( (pci_dev = pci_get_device(0x11F8, 0xbeef, pci_dev)) && pci_dev )
     {
         if(pci_dev->class != 0x058000)
