@@ -267,6 +267,7 @@ static int pmc_vep_init_module(void)
     /*Search all the vEP device*/
     g_dev.init = 0;
     g_dev.pci_dev = NULL;
+    pci_dev = NULL;
     while( (pci_dev = pci_get_device(0x11F8, 0xbeef, pci_dev)) && pci_dev )
     {
         if(pci_dev->class != 0x058000)
@@ -346,6 +347,7 @@ static int pmc_vep_init_module(void)
 
     if (g_dev.pci_dev)
     {
+        printk(KERN_DEBUG "JohnLu:Enable PCI device\n");
         if (pci_enable_device(pci_dev))
         {
             printk(KERN_DEBUG "JohnLu:Unable to Enable PCI device\n");
@@ -377,6 +379,7 @@ static int pmc_vep_init_module(void)
             printk(KERN_DEBUG "FAIL: register_chrdev_region\n");
             goto error_hdlr;
         }
+        bar_nr = 0;
         for(i = 0; i < 6; i++)
         {
             if(g_dev.bar[i].bar_size)
@@ -385,15 +388,16 @@ static int pmc_vep_init_module(void)
 
                 g_dev.bar[i].pmc_cdev.owner = THIS_MODULE;
 
-                printk(KERN_DEBUG "Add cdev major num %x, minor num %x, devt %x \n", chr_dev, i, MKDEV(MAJOR(chr_dev), i));
+                printk(KERN_DEBUG "Add cdev major num %x, minor num %x, devt %x \n", chr_dev, bar_nr, MKDEV(MAJOR(chr_dev), bar_nr));
 
-                ret = cdev_add (&(g_dev.bar[i].pmc_cdev), MKDEV(MAJOR(chr_dev), i), 1);
+                ret = cdev_add (&(g_dev.bar[i].pmc_cdev), MKDEV(MAJOR(chr_dev), bar_nr), 1);
 
                 if (ret < 0)
                 {
                     printk("FAIL: cdev_add[%d]", ret);
                     goto error_hdlr;
                 }
+                bar_nr++;
             }
         }
         g_dev.init = 1;
@@ -439,6 +443,7 @@ static void pmc_vep_exit_module(void)
         pci_clear_master(g_dev.pci_dev);
 
         pci_disable_device(g_dev.pci_dev);
+        g_dev.init = 0;
     }
 
     printk("JohnLu: pmc_vep_exit_module success\n");
