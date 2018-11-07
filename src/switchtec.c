@@ -16,6 +16,7 @@
 #include "../inc/switchtec.h"
 #include "../inc/switchtec_ioctl.h"
 
+#include <linux/types.h>
 #include <linux/interrupt.h>
 #include <linux/module.h>
 #include <linux/fs.h>
@@ -473,44 +474,60 @@ static int switchtec_dev_release(struct inode *inode, struct file *filp)
 	return 0;
 }
 
+static int dma_chan_id(struct switchtec_dma_chan *dma_chan)
+{
+	struct dma_device *dma_dev = dma_chan->chan.device;
+	struct switchtec_dev *stdev = to_stdev(dma_dev->dev);
+
+	return (dma_chan - stdev->dma_ch);
+}
+
 static int dma_alloc_chan_resources(struct dma_chan *chan)
 {
 	struct switchtec_dma_chan *dma_chan = to_st_dma_chan(chan);
 	struct dma_device *dma_dev = dma_chan->chan.device;
-	u64 temp;
+	dma_addr_t dma_addr;
 
-
+	/* TODO: The CQ and SQ buffer should be allocated adjacent to the CPU core */
 	dma_chan->cq_size = 100;
-	dma_chan->cq = devm_kcalloc(dma_dev->dev, 100, 10, GFP_DMA | GFP_KERNEL);
+	dma_chan->cq_base = devm_kcalloc(dma_dev->dev, 100, 10, GFP_DMA | GFP_KERNEL);
 
-	if (IS_ERR(dma_chan->cq))
-		return PTR_ERR(dma_chan->cq);
+	if (IS_ERR(dma_chan->cq_base))
+		return PTR_ERR(dma_chan->cq_base);
+
+	dma_chan->cq_dma_base = phys_to_dma(dma_dev->dev, virt_to_phys(dma_chan->cq_base));
 
 	dma_chan->sq_size = 100;
-	dma_chan->sq = devm_kcalloc(dma_dev->dev, 100, 10, GFP_DMA | GFP_KERNEL);
+	dma_chan->sq_base = devm_kcalloc(dma_dev->dev, 100, 10, GFP_DMA | GFP_KERNEL);
 
-	if (IS_ERR(dma_chan->sq))
+	if (IS_ERR(dma_chan->sq_base))
 		goto err_free_cq;
 
-	temp = (u64)dma_chan->cq;
+	dma_chan->sq_dma_base = phys_to_dma(dma_dev->dev, virt_to_phys(dma_chan->sq_base));
+
+	dma_addr = dma_chan->cq_dma_base;
 
 	switchtec_ch_cfg_writel(dma_chan, cq_size, dma_chan->cq_size);
-	switchtec_ch_cfg_writel(dma_chan, cq_base_lo, (u32)temp);
-	switchtec_ch_cfg_writel(dma_chan, cq_base_hi, (u32)(temp>>32));
+	switchtec_ch_cfg_writel(dma_chan, cq_base_lo, (u32)dma_addr);
+	switchtec_ch_cfg_writel(dma_chan, cq_base_hi, (u32)(dma_addr>>32));
 
-	temp = (u64)dma_chan->sq;
+	dma_addr = dma_chan->sq_dma_base;
 
 	switchtec_ch_cfg_writel(dma_chan, sq_size, dma_chan->sq_size);
-	switchtec_ch_cfg_writel(dma_chan, sq_base_lo, (u32)temp);
-	switchtec_ch_cfg_writel(dma_chan, sq_base_hi, (u32)(temp>>32));
+	switchtec_ch_cfg_writel(dma_chan, sq_base_lo, (u32)dma_addr);
+	switchtec_ch_cfg_writel(dma_chan, sq_base_hi, (u32)(dma_addr>>32));
 
 	dma_chan->used = 1;
 
+	dev_info(dma_dev->dev, "DMA channel%d setup cq %p, sq %p\n",
+			dma_chan_id(dma_chan), (void*)dma_chan->cq_dma_base,
+			(void*)dma_chan->sq_dma_base);
+
 	return 0;
 err_free_cq:
-	devm_kfree(dma_dev->dev, dma_chan->cq);
+	devm_kfree(dma_dev->dev, dma_chan->cq_base);
 
-	return PTR_ERR(dma_chan->sq);
+	return PTR_ERR(dma_chan->sq_base);
 #if 0
 	struct dw_dma		*dw = to_dw_dma(chan->device);
 
@@ -549,6 +566,23 @@ err_free_cq:
 
 static void dma_free_chan_resources(struct dma_chan *chan)
 {
+	struct switchtec_dma_chan *dma_chan = to_st_dma_chan(chan);
+	struct dma_device *dma_dev = dma_chan->chan.device;
+
+	if (dma_chan->used) {
+
+		switchtec_ch_ctrl_writel(dma_chan, ctrl,
+				SWITCHTEC_DMA_CHAN_HW_CTRL_BITMSK_CH_PAUSE);
+
+		devm_kfree(dma_dev->dev, dma_chan->cq_base);
+		devm_kfree(dma_dev->dev, dma_chan->sq_base);
+
+		dma_chan->used = 0;
+
+		dev_info(dma_dev->dev, "DMA channel%d clean up\n", dma_chan_id(dma_chan));
+	}
+
+	return ;
 #if 0
 	struct dw_dma_chan	*dwc = to_dw_dma_chan(chan);
 	struct dw_dma		*dw = to_dw_dma(chan->device);
@@ -1798,9 +1832,9 @@ static const struct file_operations switchtec_fops = {
 	.read = switchtec_dev_read,
 	.llseek = switchtec_dev_llseek,
 	.compat_ioctl = switchtec_dev_ioctl,
+	.unlocked_ioctl = switchtec_dev_ioctl,
 #if 0
 	.poll = switchtec_dev_poll,
-	.unlocked_ioctl = switchtec_dev_ioctl,
 #endif
 };
 
@@ -1874,8 +1908,13 @@ static void stdev_kill(struct switchtec_dev *stdev)
 #if 0
 	struct switchtec_user *stuser, *tmpuser;
 #endif
+	int i;
 
 	pci_clear_master(stdev->pdev);
+
+	for(i = 0; i < stdev->dma.chancnt; ++i) {
+		dma_free_chan_resources(&stdev->dma_ch[i].chan);
+	}
 
 #if 0
 	cancel_delayed_work_sync(&stdev->mrpc_timeout);
@@ -2318,10 +2357,10 @@ static int switchtec_init_dma(struct switchtec_dev *stdev)
 				&dma->channels);
 
 		/* TODO: remap the fw and hw register in the dma chan allocation */
-		dma_ch->mmio_fw_ch = stdev->mmio + \
+		dma_ch->mmio_hw_ch = stdev->mmio + \
 				SWITCHTEC_DMA_HW_CHANNEL_REGS_OFF +
 				0x1000 * i;
-		dma_ch->mmio_hw_ch = stdev->mmio + \
+		dma_ch->mmio_fw_ch = stdev->mmio + \
 				SWITCHTEC_DMA_FW_CHANNEL_REGS_OFF +
 				sizeof(struct dma_fw_ch_regs) * i;
 	}

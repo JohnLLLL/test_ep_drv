@@ -396,9 +396,22 @@ struct dma_mrpc_output{
 #define SWITCHTEC_DMA_FW_CHANNEL_REGS_OFF					(0x160 * 0x1000)
 #define SWITCHTEC_DMA_FW_CHANNEL_REGS_SIZE					(0x1000)
 
-struct dma_hw_ch_regs {
+#define SWITCHTEC_DMA_CHAN_HW_CTRL_BITMSK_CH_PAUSE					(0x1)
+#define SWITCHTEC_DMA_CHAN_HW_CTRL_BITMSK_CH_HALT					(0x2)
+#define SWITCHTEC_DMA_CHAN_HW_CTRL_BITMSK_CH_RESET					(0x4)
+#define SWITCHTEC_DMA_CHAN_HW_CTRL_BITMSK_CH_ERROR_PAUSE			(0x8)
 
-};
+#define SWITCHTEC_DMA_CHAN_HW_STAT_BITMSK_CH_PAUSED					(0x1)
+#define SWITCHTEC_DMA_CHAN_HW_STAT_BITMSK_CH_HALTED					(0x2)
+
+struct dma_hw_ch_regs {
+	u16 cq_head;
+	u16 resv0;
+	u16 sq_tail;
+	u16 resv1;
+	u32 ctrl;
+	u32 stat;
+} __packed;
 
 struct dma_fw_ch_regs {
 	/* FW register per channel - 0x0*/
@@ -419,10 +432,13 @@ struct switchtec_dma_chan {
 	bool used;
 	void __iomem *mmio_hw_ch;
 	void __iomem *mmio_fw_ch;
-	void *cq;
+	void *cq_base;
 	u32  cq_size;
-	void *sq;
+	dma_addr_t cq_dma_base;
+
+	void *sq_base;
 	u32  sq_size;
+	dma_addr_t sq_dma_base;
 
 };
 
