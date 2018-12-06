@@ -945,7 +945,6 @@ int switchtec_open_by_path(const char *path)
 
 int main(int argc, char **argv)
 {
-	struct switchtec_ioctl_dma_chan_cfg cfg;
 	int fd;
 	int ret;
 
@@ -954,8 +953,7 @@ int main(int argc, char **argv)
 	if (fd < 0)
 		return fd;
 
-	cfg.chan_id = strtoul(argv[2], 0, 0);
-	ret = ioctl(fd, SWITCHTEC_IOCTL_DMA_CHAN_CFG, &cfg);
+	ret = ioctl(fd, SWITCHTEC_IOCTL_DMA_CHAN_SHOW);
 
 	close(fd);
 

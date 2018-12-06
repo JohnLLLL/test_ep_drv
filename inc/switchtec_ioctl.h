@@ -126,7 +126,6 @@ struct switchtec_ioctl_pff_port {
 	_IOWR('W', 0x44, struct switchtec_ioctl_pff_port)
 #define SWITCHTEC_IOCTL_PORT_TO_PFF \
 	_IOWR('W', 0x45, struct switchtec_ioctl_pff_port)
-#endif
 
 
 #define SWITCHTEC_IOCTL_PART_CFG0	0
@@ -144,20 +143,36 @@ struct switchtec_ioctl_pff_port {
 #define SWITCHTEC_IOCTL_PART_VENDOR7	12
 #define SWITCHTEC_IOCTL_NUM_PARTITIONS	13
 
+#endif
+
+#define SWITCHTEC_DMA_CHAN_INIT						(0x0)
+#define SWITCHTEC_DMA_CHAN_PAUSE					(0x1)
+#define SWITCHTEC_DMA_CHAN_CH_HALT					(0x2)
+#define SWITCHTEC_DMA_CHAN_RESET					(0x3)
+
 struct switchtec_ioctl_dma_chan_cfg {
 	__u32 chan_id;
-	__u32 cq_base_lo;
-	__u32 cq_base_hi;
-	__u32 cq_size;
-	__u32 sq_base_lo;
-	__u32 sq_base_hi;
-	__u32 sq_size;
-	__u32 intv;
 	__u32 cfg;
+	__u32 op;
 };
 
+struct switchtec_ioctl_dma_cmd {
+	__u32 chan_id;
+	__u32 cmd;
+	__u32 data;
+	__u32 tag;
+};
 
 #define SWITCHTEC_IOCTL_DMA_CHAN_CFG \
 	_IOWR('W', 0x40, struct switchtec_ioctl_dma_chan_cfg)
+
+#define SWITCHTEC_IOCTL_DMA_CHAN_CMD \
+	_IOWR('W', 0x41, struct switchtec_ioctl_dma_cmd)
+
+#define SWITCHTEC_IOCTL_DMA_CHAN_CPL \
+	_IOWR('W', 0x42, struct switchtec_ioctl_dma_cmd)
+
+#define SWITCHTEC_IOCTL_DMA_CHAN_SHOW \
+	_IO('W', 0x43)
 
 #endif /* INC_SWITCHTEC_IOCTL_H_ */
