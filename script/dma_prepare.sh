@@ -36,7 +36,7 @@ function reset_drv()
 
 function send_cmd()
 {
-	$TOOL_PATH/send_cmd $1 $2 $3 $4
+	$TOOL_PATH/send_cmd $1 $2 $3 $4 $5 $6
 }
 
 # initialize the driver 

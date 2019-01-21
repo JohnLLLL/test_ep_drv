@@ -161,6 +161,7 @@ struct switchtec_ioctl_dma_cmd {
 	__u32 cmd;
 	__u32 data;
 	__u32 tag;
+	__u64 addr;
 };
 
 #define SWITCHTEC_IOCTL_DMA_CHAN_CFG \

@@ -47,8 +47,8 @@ MODULE_PARM_DESC(use_dma_mrpc,
 static dev_t switchtec_devt;
 static DEFINE_IDA(switchtec_minor_ida);
 
-struct class *switchtec_class;
-EXPORT_SYMBOL_GPL(switchtec_class);
+struct class *switchtec_dma_class;
+EXPORT_SYMBOL_GPL(switchtec_dma_class);
 #if 0
 enum mrpc_state {
 	MRPC_IDLE = 0,
@@ -2041,8 +2041,10 @@ static int ioctl_dma_send_cmd(struct switchtec_dev *stdev,
 
 	cmd.opc = (u8)dma_cmd.cmd;
 	cmd.cmd_id = dma_cmd.tag;
-	cmd.src_addr_lo = (u32)dma_chan->test_dma_base;
-	cmd.src_addr_hi = (u32)(dma_chan->test_dma_base>>32);
+	//cmd.src_addr_lo = (u32)dma_chan->test_dma_base;
+	//cmd.src_addr_hi = (u32)(dma_chan->test_dma_base>>32);
+	cmd.dst_addr_lo = (u32)dma_cmd.addr;
+	cmd.dst_addr_hi = (u32)(dma_cmd.addr>>32);
 	cmd.byte_cnt = 4;
 	*dma_chan->test_buf = dma_cmd.data;
 
@@ -2246,7 +2248,7 @@ static struct switchtec_dev *stdev_create(struct pci_dev *pdev)
 
 	dev = &stdev->dev;
 	device_initialize(dev);
-	dev->class = switchtec_class;
+	dev->class = switchtec_dma_class;
 	dev->parent = &pdev->dev;
 	dev->groups = switchtec_device_groups;
 	dev->release = stdev_release;
@@ -2259,14 +2261,14 @@ static struct switchtec_dev *stdev_create(struct pci_dev *pdev)
 	}
 
 	dev->devt = MKDEV(MAJOR(switchtec_devt), minor);
-	dev_set_name(dev, "switchtec%d", minor);
+	dev_set_name(dev, "switchtec_dma%d", minor);
 
 	cdev = &stdev->cdev;
 	cdev_init(cdev, &switchtec_fops);
 	cdev->owner = THIS_MODULE;
 	cdev->kobj.parent = &dev->kobj;
 
-	dev_info(&stdev->dev, "switchtec%d char dev\n",
+	dev_info(&stdev->dev, "switchtec_dma%d char dev\n",
 			 minor);
 
 	return stdev;
@@ -2291,7 +2293,7 @@ err_put:
 
 	dev = &stdev->dev;
 	device_initialize(dev);
-	dev->class = switchtec_class;
+	dev->class = switchtec_dma_class;
 	dev->parent = &pdev->dev;
 	dev->groups = switchtec_device_groups;
 	dev->release = stdev_release;
@@ -2611,7 +2613,8 @@ static int switchtec_init_dma(struct switchtec_dev *stdev)
 
 	/* Setup DMA engine device */
 	dma = &stdev->dma;
-	dma->dev = &stdev->dev;
+	//dma->dev = &stdev->dev;
+	dma->dev = &stdev->pdev->dev;
 
 	/* Set capabilities */
 	dma_cap_set(DMA_MEMCPY, dma->cap_mask);
@@ -2666,7 +2669,7 @@ static int switchtec_init_dma(struct switchtec_dev *stdev)
 				sizeof(struct dma_fw_ch_regs) * i;
 	}
 
-#if 0
+#if 1
 	rc = dma_async_device_register(dma);
 	if (rc)
 		goto err_dma_register;
@@ -2867,13 +2870,13 @@ static int __init switchtec_init(void)
 	int rc;
 
 	rc = alloc_chrdev_region(&switchtec_devt, 0, max_devices,
-				 "switchtec");
+				 "switchtec_dma");
 	if (rc)
 		return rc;
 
-	switchtec_class = class_create(THIS_MODULE, "switchtec");
-	if (IS_ERR(switchtec_class)) {
-		rc = PTR_ERR(switchtec_class);
+	switchtec_dma_class = class_create(THIS_MODULE, "switchtec_dma");
+	if (IS_ERR(switchtec_dma_class)) {
+		rc = PTR_ERR(switchtec_dma_class);
 		goto err_create_class;
 	}
 
@@ -2886,7 +2889,7 @@ static int __init switchtec_init(void)
 	return 0;
 
 err_pci_register:
-	class_destroy(switchtec_class);
+	class_destroy(switchtec_dma_class);
 
 err_create_class:
 	unregister_chrdev_region(switchtec_devt, max_devices);
@@ -2898,7 +2901,7 @@ module_init(switchtec_init);
 static void __exit switchtec_exit(void)
 {
 	pci_unregister_driver(&switchtec_pci_driver);
-	class_destroy(switchtec_class);
+	class_destroy(switchtec_dma_class);
 	unregister_chrdev_region(switchtec_devt, max_devices);
 	ida_destroy(&switchtec_minor_ida);
 

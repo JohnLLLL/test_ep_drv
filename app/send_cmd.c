@@ -958,6 +958,7 @@ int main(int argc, char **argv)
 	cmd.cmd = strtoul(argv[3], 0, 0);
 	cmd.tag = strtoul(argv[4], 0, 0);
 	cmd.data = strtoul(argv[5], 0, 0);
+	cmd.addr = strtoull(argv[6], 0, 0);
 	ret = ioctl(fd, SWITCHTEC_IOCTL_DMA_CHAN_CMD, &cmd);
 
 	close(fd);
