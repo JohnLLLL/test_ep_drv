@@ -147,8 +147,9 @@ struct switchtec_ioctl_pff_port {
 
 #define SWITCHTEC_DMA_CHAN_INIT						(0x0)
 #define SWITCHTEC_DMA_CHAN_PAUSE					(0x1)
-#define SWITCHTEC_DMA_CHAN_CH_HALT					(0x2)
-#define SWITCHTEC_DMA_CHAN_RESET					(0x3)
+#define SWITCHTEC_DMA_CHAN_RESUME					(0x2)
+#define SWITCHTEC_DMA_CHAN_CH_HALT					(0x3)
+#define SWITCHTEC_DMA_CHAN_RESET					(0x4)
 
 struct switchtec_ioctl_dma_chan_cfg {
 	__u32 chan_id;
@@ -164,6 +165,13 @@ struct switchtec_ioctl_dma_cmd {
 	__u64 addr;
 };
 
+struct switchtec_ioctl_dma_memcpy {
+	__u32 chan_id;
+	__u64 src_addr;
+	__u64 dst_addr;
+	char mapped;
+};
+
 #define SWITCHTEC_IOCTL_DMA_CHAN_CFG \
 	_IOWR('W', 0x40, struct switchtec_ioctl_dma_chan_cfg)
 
@@ -175,5 +183,8 @@ struct switchtec_ioctl_dma_cmd {
 
 #define SWITCHTEC_IOCTL_DMA_CHAN_SHOW \
 	_IO('W', 0x43)
+
+#define SWITCHTEC_IOCTL_DMA_MEMCPY \
+	_IOWR('W', 0x44, struct switchtec_ioctl_dma_memcpy)
 
 #endif /* INC_SWITCHTEC_IOCTL_H_ */

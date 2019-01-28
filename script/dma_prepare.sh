@@ -39,6 +39,11 @@ function send_cmd()
 	$TOOL_PATH/send_cmd $1 $2 $3 $4 $5 $6
 }
 
+function dma_memcpy()
+{
+	$TOOL_PATH/dma_memcpy $1 $2 $3 $4 1
+}
+
 # initialize the driver 
 insmod $DRIVER_PATH/dma_drv.ko
 

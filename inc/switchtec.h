@@ -150,6 +150,13 @@ struct dma_fw_ch_regs {
 	u32 resv0[22];
 } __packed;
 
+struct switchtec_dma_desc {
+	/* Switchtec data */
+	struct dma_async_tx_descriptor txd;
+	struct dma_se_cmd cmd;
+	struct list_head desc_list;
+};
+
 struct switchtec_dma_chan {
 	struct dma_chan chan;
 	bool used;
@@ -170,6 +177,10 @@ struct switchtec_dma_chan {
 
 	u32 *test_buf;
 	dma_addr_t test_dma_base;
+
+	struct switchtec_dma_desc *dma_desc;
+	struct list_head free_list;
+	struct list_head used_list;
 };
 
 static inline struct dma_hw_ch_regs __iomem * __hw_ch_reg(struct switchtec_dma_chan *sw_ch)
@@ -185,6 +196,12 @@ static inline struct dma_fw_ch_regs __iomem * __fw_ch_reg(struct switchtec_dma_c
 static inline struct switchtec_dma_chan *to_st_dma_chan(struct dma_chan *chan)
 {
 	return container_of(chan, struct switchtec_dma_chan, chan);
+}
+
+static inline struct switchtec_dma_desc *
+txd_to_dma_desc(struct dma_async_tx_descriptor *txd)
+{
+	return container_of(txd, struct switchtec_dma_desc, txd);
 }
 
 #define switchtec_ch_cfg_readl(sw_ch, name) \
@@ -259,10 +276,14 @@ struct switchtec_dev {
 	struct device dev;
 	struct cdev cdev;
 	struct dma_device dma;
+	struct dma_pool *desc_pool;
 
 	void __iomem *mmio;
 	struct switchtec_dma_chan *dma_ch;
 
+
+	/*Unit test*/
+	struct dma_chan *test_chan;
 #if 0
 	unsigned int event_irq;
 	unsigned int dma_mrpc_irq;
