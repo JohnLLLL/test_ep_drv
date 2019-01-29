@@ -44,6 +44,11 @@ function dma_memcpy()
 	$TOOL_PATH/dma_memcpy $1 $2 $3 $4 1
 }
 
+function dma_imm_data()
+{
+	$TOOL_PATH/dma_imm_data $1 $2 $3 $4
+}
+
 # initialize the driver 
 insmod $DRIVER_PATH/dma_drv.ko
 

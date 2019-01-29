@@ -63,7 +63,10 @@
 #define SWITCHTEC_DMA_CHAN_HW_CTRL_BITMSK_CH_PAUSE					(0x1)
 #define SWITCHTEC_DMA_CHAN_HW_CTRL_BITMSK_CH_HALT					(0x2)
 #define SWITCHTEC_DMA_CHAN_HW_CTRL_BITMSK_CH_RESET					(0x4)
-#define SWITCHTEC_DMA_CHAN_HW_CTRL_BITMSK_CH_ERROR_PAUSE			(0x8)
+
+#define SWITCHTEC_DMA_CHAN_HW_STATUS_BITMSK_CH_PAUSED				(0x1)
+#define SWITCHTEC_DMA_CHAN_HW_STATUS_BITMSK_CH_HALTED				(0x2)
+#define SWITCHTEC_DMA_CHAN_HW_STATUS_BITMSK_CH_ERROR_PAUSED			(0x4)
 
 #define SWITCHTEC_DMA_CHAN_HW_STAT_BITMSK_CH_PAUSED					(0x1)
 #define SWITCHTEC_DMA_CHAN_HW_STAT_BITMSK_CH_HALTED					(0x2)
@@ -71,10 +74,28 @@
 #define SWITCHTEC_DMA_CMD_READ_IMMD									(0x01)
 #define SWITCHTEC_DMA_CMD_NOP										(0x07)
 
+#define SWITCHTEC_DMA_CMD_OP_TRANSFER								(0x0)
+#define SWITCHTEC_DMA_CMD_OP_READ_IMM								(0x1)
+#define SWITCHTEC_DMA_CMD_OP_WRITE_IMM								(0x2)
+#define SWITCHTEC_DMA_CMD_OP_ECHO									(0x7)
+
 struct dma_se_cmd {
 	/* dw0 */
 	u32 opc: 8;
-	u32 resv0: 24;
+	u32 : 5;
+	u32 dfm: 1;
+	u32 liof: 1;
+	u32 brr: 1;
+	u32 dro: 1;
+	u32 dns: 1;
+	u32 dat: 2;
+	u32 dtc: 3;
+	u32 : 1;
+	u32 sro: 1;
+	u32 sns: 1;
+	u32 sat: 2;
+	u32 stc: 3;
+	u32 : 1;
 	/* dw1 */
 	u32 resv1: 16;
 	u32 cmd_id:16;
@@ -175,8 +196,11 @@ struct switchtec_dma_chan {
 	u16  sq_size;
 	dma_addr_t sq_dma_base;
 
-	u32 *test_buf;
-	dma_addr_t test_dma_base;
+	void *dst_test_buf;
+	dma_addr_t dst_test_base;
+
+	void *src_test_buf;
+	dma_addr_t src_test_base;
 
 	struct switchtec_dma_desc *dma_desc;
 	struct list_head free_list;
@@ -263,7 +287,8 @@ struct dma_fw_regs {
 
 	/* Config register - 0x180*/
 	u32 reset;
-	u32 resv3[31];
+	u32 reva_wa;
+	u32 resv3[30];
 
 	/* FW interrupt register - 0x200*/
 	u32 intv;

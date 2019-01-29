@@ -6,3 +6,4 @@ all:
 	gcc -g ./send_cmd.c -o send_cmd
 	gcc -g ./show_info.c -o show_info
 	gcc -g ./dma_memcpy.c -o dma_memcpy
+	gcc -g ./dma_imm_data.c -o dma_imm_data

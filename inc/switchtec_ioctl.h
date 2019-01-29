@@ -172,6 +172,12 @@ struct switchtec_ioctl_dma_memcpy {
 	char mapped;
 };
 
+struct switchtec_ioctl_dma_imm_data {
+	__u32 chan_id;
+	__u64 dst_addr;
+	__u64 src_val;
+};
+
 #define SWITCHTEC_IOCTL_DMA_CHAN_CFG \
 	_IOWR('W', 0x40, struct switchtec_ioctl_dma_chan_cfg)
 
@@ -186,5 +192,8 @@ struct switchtec_ioctl_dma_memcpy {
 
 #define SWITCHTEC_IOCTL_DMA_MEMCPY \
 	_IOWR('W', 0x44, struct switchtec_ioctl_dma_memcpy)
+
+#define SWITCHTEC_IOCTL_DMA_IMM_DATA \
+	_IOWR('W', 0x45, struct switchtec_ioctl_dma_imm_data)
 
 #endif /* INC_SWITCHTEC_IOCTL_H_ */

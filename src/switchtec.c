@@ -510,6 +510,7 @@ static void dma_desc_complete(struct switchtec_dma_chan *dma_chan, struct switch
 	dma_async_tx_callback callback;
 	void *call_back_param;
 
+	dma_cookie_complete(&desc->txd);
 	callback = desc->txd.callback;
 	call_back_param = desc->txd.callback_param;
 
@@ -547,6 +548,8 @@ static int dma_chan_send_cmd(struct switchtec_dma_chan *dma_chan, struct dma_se_
 {
 	u16 chan_id;
 	u32 sq_tail;
+	dma_addr_t src;
+	dma_addr_t dst;
 	struct dma_device *dma_dev = dma_chan->chan.device;
 
 	if (!dma_chan->used)
@@ -558,10 +561,15 @@ static int dma_chan_send_cmd(struct switchtec_dma_chan *dma_chan, struct dma_se_
 		return -ENOSPC;
 
 	chan_id = dma_chan_id(dma_chan);
-	dev_info(dma_dev->dev, "DMA channel%d old sq tail %d, sq size %d\n",
+	dev_info(dma_dev->dev, "DMA chan[%d] sq tail %d, sq size %d\n",
 			chan_id, sq_tail, dma_chan->sq_size);
-	dev_info(dma_dev->dev, "DMA channel%d send cmd: 0x%08x 0x%08x 0x%08x 0x%08x 0x%08x 0x%08x 0x%08x 0x%08x",
+	dst = (dma_addr_t)(((dma_addr_t)cmd->dst_addr_hi << 32) | (dma_addr_t)cmd->dst_addr_lo);
+	src = (dma_addr_t)(((dma_addr_t)cmd->src_addr_hi << 32) | (dma_addr_t)cmd->src_addr_lo);
+	dev_info(dma_dev->dev, "DMA chan[%d] cmd[0x%x] op 0x%x dst %pad, src %pad\n",/**/
+			chan_id, cmd->cmd_id, cmd->opc, &dst, &src);
+	dev_info(dma_dev->dev, "DMA chan[%d] cmd[0x%x] raw: 0x%08x 0x%08x 0x%08x 0x%08x 0x%08x 0x%08x 0x%08x 0x%08x",
 			chan_id,
+			cmd->cmd_id,
 			*(((u32*)cmd) + 0),
 			*(((u32*)cmd) + 1),
 			*(((u32*)cmd) + 2),
@@ -577,19 +585,15 @@ static int dma_chan_send_cmd(struct switchtec_dma_chan *dma_chan, struct dma_se_
 
 	dma_chan->sq_tail = sq_tail;
 
-	dev_info(dma_dev->dev, "DMA channel%d new sq tail %d, sq size %d\n",
-			dma_chan_id(dma_chan), sq_tail, dma_chan->sq_size);
 	/* Kick doorbell */
 	switchtec_ch_ctrl_writel(dma_chan, sq_tail, sq_tail);
-
-	dev_info(dma_dev->dev, "DMA send cmd sq tail %d\n",
-			sq_tail);
 
 	return 0;
 }
 
 static int dma_chan_recv_cpl(struct switchtec_dma_chan *dma_chan)
 {
+	u16 chan_id;
 	u32 cq_head;
 	struct dma_ce_cpl *cpl;
 	struct dma_device *dma_dev = dma_chan->chan.device;
@@ -600,6 +604,7 @@ static int dma_chan_recv_cpl(struct switchtec_dma_chan *dma_chan)
 	if (!dma_chan->used)
 		return -EINVAL;
 
+	chan_id = dma_chan_id(dma_chan);
 	cq_head = dma_chan->cq_head;
 
 #ifdef SWITCHTEC_DMA_REVA
@@ -613,7 +618,13 @@ static int dma_chan_recv_cpl(struct switchtec_dma_chan *dma_chan)
 #endif
 		/* New completion */
 		/* A new cpl */
-		dev_info(dma_dev->dev, "DMA cpl: 0x%08x 0x%08x 0x%08x 0x%08x 0x%08x 0x%08x 0x%08x 0x%08x",
+		dev_info(dma_dev->dev, "DMA chan[%d] cq head %d, sq size %d\n",
+				chan_id, cq_head, dma_chan->cq_size);
+		dev_info(dma_dev->dev, "DMA chan[%d] cpl[0x%x] return data 0x%x cpl %d sq_head %d\n",
+				chan_id, cpl->cmd_id, cpl->rd_im_dw, cpl->cpl_stat, cpl->sq_head);
+		dev_info(dma_dev->dev, "DMA chan[%d] cpl[0x%x] raw: 0x%08x 0x%08x 0x%08x 0x%08x 0x%08x 0x%08x 0x%08x 0x%08x",
+				chan_id,
+				cpl->cmd_id,
 				*(((u32*)cpl) + 0),
 				*(((u32*)cpl) + 1),
 				*(((u32*)cpl) + 2),
@@ -623,8 +634,6 @@ static int dma_chan_recv_cpl(struct switchtec_dma_chan *dma_chan)
 				*(((u32*)cpl) + 6),
 				*(((u32*)cpl) + 7));
 
-		dev_info(dma_dev->dev, "DMA cmd 0x%x return data 0x%x cpl %d sq_head %d\n",
-				cpl->cmd_id, cpl->rd_im_dw, cpl->cpl_stat, cpl->sq_head);
 
 		if (cpl->cmd_id < DMA_CHANNEL_QUEUE_SIZE) {
 			dma_desc_complete(dma_chan, &dma_chan->dma_desc[cpl->cmd_id]);
@@ -706,7 +715,7 @@ static dma_cookie_t dma_desc_submit(struct dma_async_tx_descriptor *tx)
 	int err;
 
 	cookie = dma_cookie_assign(tx);
-	dev_info(dma_dev->dev, "%s: queued %u\n", __func__, desc->txd.cookie);
+	dev_info(dma_dev->dev, "%s: cookie %u\n", __func__, desc->txd.cookie);
 
 	err = dma_chan_send_cmd(dma_chan, &desc->cmd);
 
@@ -717,7 +726,7 @@ static dma_cookie_t dma_desc_submit(struct dma_async_tx_descriptor *tx)
 }
 
 static struct dma_async_tx_descriptor *
-dma_prep_dma_memcpy(struct dma_chan *chan, dma_addr_t dest, dma_addr_t src,
+dma_prep_dma_memcpy(struct dma_chan *chan, dma_addr_t dst, dma_addr_t src,
 		size_t len, unsigned long flags)
 {
 	struct switchtec_dma_chan *dma_chan = to_st_dma_chan(chan);
@@ -726,7 +735,7 @@ dma_prep_dma_memcpy(struct dma_chan *chan, dma_addr_t dest, dma_addr_t src,
 
 	dev_info(dma_dev->dev,
 			"%s: d%pad s%pad l0x%zx f0x%lx\n", __func__,
-			&dest, &src, len, flags);
+			&dst, &src, len, flags);
 
 	if (unlikely(!len)) {
 		dev_info(dma_dev->dev, "%s: length is zero!\n", __func__);
@@ -742,12 +751,15 @@ dma_prep_dma_memcpy(struct dma_chan *chan, dma_addr_t dest, dma_addr_t src,
 
 	desc->txd.flags = flags;
 
+	memset(&desc->cmd, 0, sizeof(struct dma_se_cmd));
+
 	/* Compose the command */
 	desc->cmd.src_addr_lo = (u32)src;
 	desc->cmd.src_addr_hi = (u32)(src>>32);
-	desc->cmd.dst_addr_lo = (u32)dest;
-	desc->cmd.dst_addr_hi = (u32)(dest>>32);
+	desc->cmd.dst_addr_lo = (u32)dst;
+	desc->cmd.dst_addr_hi = (u32)(dst>>32);
 	desc->cmd.byte_cnt = len;
+	desc->cmd.liof = 1;
 #if 0
 #else
 	/* Set the loop back command */
@@ -774,7 +786,7 @@ dma_prep_dma_memcpy(struct dma_chan *chan, dma_addr_t dest, dma_addr_t src,
 
 	dev_vdbg(chan2dev(chan),
 			"%s: d%pad s%pad l0x%zx f0x%lx\n", __func__,
-			&dest, &src, len, flags);
+			&dst, &src, len, flags);
 
 	if (unlikely(!len)) {
 		dev_dbg(chan2dev(chan), "%s: length is zero!\n", __func__);
@@ -783,7 +795,7 @@ dma_prep_dma_memcpy(struct dma_chan *chan, dma_addr_t dest, dma_addr_t src,
 
 	dwc->direction = DMA_MEM_TO_MEM;
 
-	src_width = dst_width = __ffs(data_width | src | dest | len);
+	src_width = dst_width = __ffs(data_width | src | dst | len);
 
 	ctllo = DWC_DEFAULT_CTLLO(chan)
 			| DWC_CTLL_DST_WIDTH(dst_width)
@@ -799,7 +811,7 @@ dma_prep_dma_memcpy(struct dma_chan *chan, dma_addr_t dest, dma_addr_t src,
 			goto err_desc_get;
 
 		lli_write(desc, sar, src + offset);
-		lli_write(desc, dar, dest + offset);
+		lli_write(desc, dar, dst + offset);
 		lli_write(desc, ctllo, ctllo);
 		lli_write(desc, ctlhi, bytes2block(dwc, len - offset, src_width, &xfer_count));
 		desc->len = xfer_count;
@@ -828,6 +840,43 @@ err_desc_get:
 	dwc_desc_put(dwc, first);
 	return NULL;
 #endif
+}
+
+/* Program a status descriptor with dst as address and value to be written */
+static struct dma_async_tx_descriptor *
+dma_prep_dma_imm_data(struct dma_chan *chan, dma_addr_t dst, u64 src_val,
+			 unsigned long flags)
+{
+	struct switchtec_dma_chan *dma_chan = to_st_dma_chan(chan);
+	struct dma_device *dma_dev = dma_chan->chan.device;
+	struct switchtec_dma_desc *desc;
+
+	dev_info(dma_dev->dev,
+			"%s: imm data d%pad 0x%llx f0x%lx\n", __func__,
+			&dst, src_val, flags);
+
+	desc = dma_desc_get(dma_chan);
+
+	if (!desc){
+		dev_info(dma_dev->dev, "no desc\n");
+		return NULL;
+	}
+
+	desc->txd.flags = flags;
+
+	memset(&desc->cmd, 0, sizeof(struct dma_se_cmd));
+
+	/* Compose the command */
+	desc->cmd.src_addr_lo = (u32)src_val;
+	desc->cmd.src_addr_hi = (u32)(src_val>>32);
+	desc->cmd.dst_addr_lo = (u32)dst;
+	desc->cmd.dst_addr_hi = (u32)(dst>>32);
+	desc->cmd.byte_cnt = sizeof(src_val);
+	desc->cmd.liof = 1;
+	desc->cmd.opc = SWITCHTEC_DMA_CMD_OP_WRITE_IMM;
+	desc->cmd.cmd_id = (desc - dma_chan->dma_desc);
+
+	return &desc->txd;
 }
 
 static int dma_chan_pause(struct dma_chan *chan)
@@ -949,14 +998,17 @@ static int dma_alloc_chan_resources(struct dma_chan *chan)
 	}
 
 	/* TODO: The CQ and SQ buffer should be allocated adjacent to the CPU core */
-	dma_chan->test_buf = (u32*)devm_get_free_pages(dma_dev->dev, GFP_DMA | GFP_KERNEL, 0);
+	dma_chan->dst_test_buf = (void*)devm_get_free_pages(dma_dev->dev, GFP_DMA | GFP_KERNEL, 1);
 
-	if (unlikely(!dma_chan->test_buf)) {
+	if (unlikely(!dma_chan->dst_test_buf)) {
 		err = (-ENOMEM);
 		goto err_free_desc;
 	}
 
-	dma_chan->test_dma_base = phys_to_dma(dma_dev->dev, virt_to_phys(dma_chan->test_buf));
+	dma_chan->src_test_buf = dma_chan->dst_test_buf + PAGE_SIZE;
+
+	dma_chan->dst_test_base = phys_to_dma(dma_dev->dev, virt_to_phys(dma_chan->dst_test_buf));
+	dma_chan->src_test_base = phys_to_dma(dma_dev->dev, virt_to_phys(dma_chan->src_test_buf));
 
 	dma_chan->cq_head = 0;
 	dma_chan->cq_size = DMA_CHANNEL_QUEUE_SIZE;
@@ -966,6 +1018,10 @@ static int dma_alloc_chan_resources(struct dma_chan *chan)
 		err = (-ENOMEM);
 		goto err_free_test;
 	}
+
+	/* Clean up the cpl buff */
+	dma_chan->phase = 0;
+	memset(dma_chan->cq_base, 0, sizeof(struct dma_ce_cpl)*DMA_CHANNEL_DESC_NUM);
 
 	dma_chan->cq_dma_base = phys_to_dma(dma_dev->dev, virt_to_phys(dma_chan->cq_base));
 
@@ -996,9 +1052,6 @@ static int dma_alloc_chan_resources(struct dma_chan *chan)
 	switchtec_ch_cfg_writel(dma_chan, sq_base_lo, (u32)dma_addr);
 	switchtec_ch_cfg_writel(dma_chan, sq_base_hi, (u32)(dma_addr>>32));
 
-	/* Bind the channel to interrupt vector */
-	switchtec_ch_cfg_writel(dma_chan, intv, 1);
-
 	/* Setup the weight round robin value */
 	switchtec_ch_cfg_writel(dma_chan, arb_weight, 0x01);
 
@@ -1008,18 +1061,21 @@ static int dma_alloc_chan_resources(struct dma_chan *chan)
 	/* Release the channel */
 	switchtec_ch_ctrl_writel(dma_chan, ctrl, 0);
 
+	/* Bind the channel to interrupt vector */
+	switchtec_ch_cfg_writel(dma_chan, intv, 0);
+
 	dma_chan->used = 1;
 
 	dev_info(dma_dev->dev, "DMA channel%d setup cq %p, sq %p\n",
 			dma_chan_id(dma_chan), (void*)dma_chan->cq_dma_base,
 			(void*)dma_chan->sq_dma_base);
 
-	return 0;
+	return DMA_CHANNEL_DESC_NUM;
 
 err_free_cq:
 	devm_free_pages(dma_dev->dev, (unsigned long)dma_chan->cq_base);
 err_free_test:
-	devm_free_pages(dma_dev->dev, (unsigned long)dma_chan->test_buf);
+	devm_free_pages(dma_dev->dev, (unsigned long)dma_chan->dst_test_buf);
 err_free_desc:
 	devm_kfree(dma_dev->dev, dma_chan->dma_desc);
 
@@ -1038,7 +1094,7 @@ static void dma_free_chan_resources(struct dma_chan *chan)
 
 		devm_free_pages(dma_dev->dev, (unsigned long)dma_chan->cq_base);
 		devm_free_pages(dma_dev->dev, (unsigned long)dma_chan->sq_base);
-		devm_free_pages(dma_dev->dev, (unsigned long)dma_chan->test_buf);
+		devm_free_pages(dma_dev->dev, (unsigned long)dma_chan->dst_test_buf);
 		devm_kfree(dma_dev->dev, dma_chan->dma_desc);
 
 		dma_chan->used = 0;
@@ -1353,28 +1409,26 @@ dma_tx_status(struct dma_chan *chan,
 	      dma_cookie_t cookie,
 	      struct dma_tx_state *txstate)
 {
-#if 0
-	struct dw_dma_chan	*dwc = to_dw_dma_chan(chan);
+	struct switchtec_dma_chan *dma_chan = to_st_dma_chan(chan);
 	enum dma_status		ret;
 
 	ret = dma_cookie_status(chan, cookie, txstate);
 	if (ret == DMA_COMPLETE)
 		return ret;
 
-	dwc_scan_descriptors(to_dw_dma(chan->device), dwc);
-
-	ret = dma_cookie_status(chan, cookie, txstate);
-	if (ret == DMA_COMPLETE)
-		return ret;
-
-	dma_set_residue(txstate, dwc_get_residue(dwc, cookie));
-
-	if (test_bit(DW_DMA_IS_PAUSED, &dwc->flags) && ret == DMA_IN_PROGRESS)
-		return DMA_PAUSED;
+	if (ret == DMA_IN_PROGRESS) {
+		if (switchtec_chan_readl(dma_chan, stat) & \
+				SWITCHTEC_DMA_CHAN_HW_STATUS_BITMSK_CH_PAUSED)
+			return DMA_PAUSED;
+		if (switchtec_chan_readl(dma_chan, stat) & \
+				SWITCHTEC_DMA_CHAN_HW_STATUS_BITMSK_CH_HALTED)
+			return DMA_PAUSED;
+		if (switchtec_chan_readl(dma_chan, stat) & \
+				SWITCHTEC_DMA_CHAN_HW_STATUS_BITMSK_CH_ERROR_PAUSED)
+			return DMA_ERROR;
+	}
 
 	return ret;
-#endif
-	return DMA_COMPLETE;
 }
 
 static void dma_issue_pending(struct dma_chan *chan)
@@ -2206,6 +2260,7 @@ static int ioctl_dma_memcpy(struct switchtec_dev *stdev,
 {
 	struct switchtec_ioctl_dma_memcpy dma_cmd = {0};
 	struct dma_chan *chan;
+	struct switchtec_dma_chan *dma_chan;
 	struct dma_device *dma_dev;
 	enum dma_ctrl_flags flags;
 	dma_cookie_t cookie;
@@ -2214,11 +2269,18 @@ static int ioctl_dma_memcpy(struct switchtec_dev *stdev,
 	if (copy_from_user(&dma_cmd, ucmd, sizeof(dma_cmd)))
 		return -EFAULT;
 
+	if (!(dma_cmd.dst_addr < PAGE_SIZE))
+		return -EINVAL;
+
+	if (!(dma_cmd.src_addr < PAGE_SIZE))
+		return -EINVAL;
+
 	chan = stdev->test_chan;
+	dma_chan = to_st_dma_chan(chan);
 	dma_dev = chan->device;
 	flags =  DMA_PREP_INTERRUPT | DMA_CTRL_ACK ;
-	txd = dma_dev->device_prep_dma_memcpy(chan, dma_cmd.src_addr,
-			dma_cmd.dst_addr, 0x10, flags);
+	txd = dma_dev->device_prep_dma_memcpy(chan, dma_chan->src_test_base + dma_cmd.src_addr,
+			dma_chan->dst_test_base + dma_cmd.dst_addr, 0x10, flags);
 
 	 if (!txd) {
 		dev_info(&stdev->dev, "Failed to prepare DMA memcpy\n");
@@ -2239,6 +2301,62 @@ static int ioctl_dma_memcpy(struct switchtec_dev *stdev,
 	dma_async_issue_pending(chan);
 
 //	wait_for_completion(&comp1);
+
+	return 0;
+}
+
+static void __dma_imm_data_complete_func(void *completion)
+{
+    complete(completion);
+}
+
+static int ioctl_dma_imm_data(struct switchtec_dev *stdev,
+			    struct switchtec_ioctl_dma_imm_data __user *ucmd)
+{
+	struct switchtec_ioctl_dma_imm_data cmd = {0};
+	struct dma_chan *chan;
+	struct switchtec_dma_chan *dma_chan;
+	struct dma_device *dma_dev;
+	enum dma_ctrl_flags flags;
+	dma_cookie_t cookie;
+	struct dma_async_tx_descriptor *txd = NULL;
+	struct completion comp1;
+	u64 src_val;
+
+	if (copy_from_user(&cmd, ucmd, sizeof(cmd)))
+		return -EFAULT;
+
+	if (!(cmd.dst_addr < PAGE_SIZE))
+		return -EINVAL;
+
+	chan = stdev->test_chan;
+	dma_chan = to_st_dma_chan(chan);
+	dma_dev = chan->device;
+	flags =  DMA_PREP_INTERRUPT | DMA_CTRL_ACK ;
+	txd = dma_dev->device_prep_dma_imm_data(chan, dma_chan->dst_test_base + cmd.dst_addr,
+			cmd.src_val, flags);
+
+	 if (!txd) {
+		dev_info(&stdev->dev, "Failed to prepare DMA memcpy\n");
+		return -1;
+	}
+
+	init_completion(&comp1);
+	txd->callback = __dma_imm_data_complete_func;
+	txd->callback_param = &comp1;
+
+	cookie = txd->tx_submit(txd);
+	if (dma_submit_error(cookie)) {
+		dev_info(&stdev->dev, "Failed to do DMA tx_submit\n");
+		return -1;
+	}
+
+	dma_async_issue_pending(chan);
+
+	wait_for_completion(&comp1);
+
+	src_val = *(u64*)(dma_chan->dst_test_buf + cmd.dst_addr);
+	dev_info(&stdev->dev, "DMA imm data get 0x%llx\n", src_val);
 
 	return 0;
 }
@@ -2265,7 +2383,7 @@ static int ioctl_dma_send_cmd(struct switchtec_dev *stdev,
 	cmd.dst_addr_lo = (u32)dma_cmd.addr;
 	cmd.dst_addr_hi = (u32)(dma_cmd.addr>>32);
 	cmd.byte_cnt = 4;
-	*dma_chan->test_buf = dma_cmd.data;
+	*(u32*)dma_chan->dst_test_buf = dma_cmd.data;
 
 	return dma_chan_send_cmd(dma_chan, &cmd);
 }
@@ -2330,6 +2448,9 @@ static long switchtec_dev_ioctl(struct file *filp, unsigned int cmd,
 		break;
 	case SWITCHTEC_IOCTL_DMA_MEMCPY:
 		rc = ioctl_dma_memcpy(stdev, argp);
+		break;
+	case SWITCHTEC_IOCTL_DMA_IMM_DATA:
+		rc = ioctl_dma_imm_data(stdev, argp);
 		break;
 	default:
 		rc = -ENOTTY;
@@ -2844,6 +2965,7 @@ static int switchtec_init_dma(struct switchtec_dev *stdev)
 
 	dma->device_prep_dma_memcpy = dma_prep_dma_memcpy;
 	dma->device_prep_slave_sg = dma_prep_slave_sg;
+	dma->device_prep_dma_imm_data = dma_prep_dma_imm_data;
 
 	dma->device_config = dma_config;
 	dma->device_pause = dma_chan_pause;
@@ -2892,6 +3014,9 @@ static int switchtec_init_dma(struct switchtec_dev *stdev)
 	rc = dma_async_device_register(dma);
 	if (rc)
 		goto err_dma_register;
+
+	/* Toggle the MSIX WA because reva issue */
+	switchtec_writel(stdev, reva_wa, 1);
 
 	dev_info(&stdev->dev, "switchtec dma dev\n");
 
