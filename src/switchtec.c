@@ -1140,157 +1140,6 @@ static void dma_free_chan_resources(struct dma_chan *chan)
 #endif
 }
 
-
-static struct dma_async_tx_descriptor *
-dma_prep_slave_sg(struct dma_chan *chan, struct scatterlist *sgl,
-		unsigned int sg_len, enum dma_transfer_direction direction,
-		unsigned long flags, void *context)
-{
-#if 0
-	struct dw_dma_chan	*dwc = to_dw_dma_chan(chan);
-	struct dw_dma		*dw = to_dw_dma(chan->device);
-	struct dma_slave_config	*sconfig = &dwc->dma_sconfig;
-	struct dw_desc		*prev;
-	struct dw_desc		*first;
-	u32			ctllo;
-	u8			m_master = dwc->dws.m_master;
-	u8			lms = DWC_LLP_LMS(m_master);
-	dma_addr_t		reg;
-	unsigned int		reg_width;
-	unsigned int		mem_width;
-	unsigned int		data_width = dw->pdata->data_width[m_master];
-	unsigned int		i;
-	struct scatterlist	*sg;
-	size_t			total_len = 0;
-
-	dev_vdbg(chan2dev(chan), "%s\n", __func__);
-
-	if (unlikely(!is_slave_direction(direction) || !sg_len))
-		return NULL;
-
-	dwc->direction = direction;
-
-	prev = first = NULL;
-
-	switch (direction) {
-	case DMA_MEM_TO_DEV:
-		reg_width = __ffs(sconfig->dst_addr_width);
-		reg = sconfig->dst_addr;
-		ctllo = (DWC_DEFAULT_CTLLO(chan)
-				| DWC_CTLL_DST_WIDTH(reg_width)
-				| DWC_CTLL_DST_FIX
-				| DWC_CTLL_SRC_INC);
-
-		ctllo |= sconfig->device_fc ? DWC_CTLL_FC(DW_DMA_FC_P_M2P) :
-			DWC_CTLL_FC(DW_DMA_FC_D_M2P);
-
-		for_each_sg(sgl, sg, sg_len, i) {
-			struct dw_desc	*desc;
-			u32		len, mem;
-			size_t		dlen;
-
-			mem = sg_dma_address(sg);
-			len = sg_dma_len(sg);
-
-			mem_width = __ffs(data_width | mem | len);
-
-slave_sg_todev_fill_desc:
-			desc = dwc_desc_get(dwc);
-			if (!desc)
-				goto err_desc_get;
-
-			lli_write(desc, sar, mem);
-			lli_write(desc, dar, reg);
-			lli_write(desc, ctlhi, bytes2block(dwc, len, mem_width, &dlen));
-			lli_write(desc, ctllo, ctllo | DWC_CTLL_SRC_WIDTH(mem_width));
-			desc->len = dlen;
-
-			if (!first) {
-				first = desc;
-			} else {
-				lli_write(prev, llp, desc->txd.phys | lms);
-				list_add_tail(&desc->desc_node, &first->tx_list);
-			}
-			prev = desc;
-
-			mem += dlen;
-			len -= dlen;
-			total_len += dlen;
-
-			if (len)
-				goto slave_sg_todev_fill_desc;
-		}
-		break;
-	case DMA_DEV_TO_MEM:
-		reg_width = __ffs(sconfig->src_addr_width);
-		reg = sconfig->src_addr;
-		ctllo = (DWC_DEFAULT_CTLLO(chan)
-				| DWC_CTLL_SRC_WIDTH(reg_width)
-				| DWC_CTLL_DST_INC
-				| DWC_CTLL_SRC_FIX);
-
-		ctllo |= sconfig->device_fc ? DWC_CTLL_FC(DW_DMA_FC_P_P2M) :
-			DWC_CTLL_FC(DW_DMA_FC_D_P2M);
-
-		for_each_sg(sgl, sg, sg_len, i) {
-			struct dw_desc	*desc;
-			u32		len, mem;
-			size_t		dlen;
-
-			mem = sg_dma_address(sg);
-			len = sg_dma_len(sg);
-
-slave_sg_fromdev_fill_desc:
-			desc = dwc_desc_get(dwc);
-			if (!desc)
-				goto err_desc_get;
-
-			lli_write(desc, sar, reg);
-			lli_write(desc, dar, mem);
-			lli_write(desc, ctlhi, bytes2block(dwc, len, reg_width, &dlen));
-			mem_width = __ffs(data_width | mem | dlen);
-			lli_write(desc, ctllo, ctllo | DWC_CTLL_DST_WIDTH(mem_width));
-			desc->len = dlen;
-
-			if (!first) {
-				first = desc;
-			} else {
-				lli_write(prev, llp, desc->txd.phys | lms);
-				list_add_tail(&desc->desc_node, &first->tx_list);
-			}
-			prev = desc;
-
-			mem += dlen;
-			len -= dlen;
-			total_len += dlen;
-
-			if (len)
-				goto slave_sg_fromdev_fill_desc;
-		}
-		break;
-	default:
-		return NULL;
-	}
-
-	if (flags & DMA_PREP_INTERRUPT)
-		/* Trigger interrupt after last block */
-		lli_set(prev, ctllo, DWC_CTLL_INT_EN);
-
-	prev->lli.llp = 0;
-	lli_clear(prev, ctllo, DWC_CTLL_LLP_D_EN | DWC_CTLL_LLP_S_EN);
-	first->total_len = total_len;
-
-	return &first->txd;
-
-err_desc_get:
-	dev_err(chan2dev(chan),
-		"not enough descriptors available. Direction %d\n", direction);
-	dwc_desc_put(dwc, first);
-	return NULL;
-#endif
-	return NULL;
-}
-
 static int dma_config(struct dma_chan *chan, struct dma_slave_config *sconfig)
 {
 #if 0
@@ -1411,20 +1260,19 @@ dma_tx_status(struct dma_chan *chan,
 {
 	struct switchtec_dma_chan *dma_chan = to_st_dma_chan(chan);
 	enum dma_status		ret;
+	u32 chan_stat;
 
 	ret = dma_cookie_status(chan, cookie, txstate);
 	if (ret == DMA_COMPLETE)
 		return ret;
 
 	if (ret == DMA_IN_PROGRESS) {
-		if (switchtec_chan_readl(dma_chan, stat) & \
-				SWITCHTEC_DMA_CHAN_HW_STATUS_BITMSK_CH_PAUSED)
+		chan_stat = switchtec_ch_ctrl_readl(dma_chan, stat);
+		if (chan_stat & SWITCHTEC_DMA_CHAN_HW_STATUS_BITMSK_CH_PAUSED)
 			return DMA_PAUSED;
-		if (switchtec_chan_readl(dma_chan, stat) & \
-				SWITCHTEC_DMA_CHAN_HW_STATUS_BITMSK_CH_HALTED)
+		if (chan_stat & SWITCHTEC_DMA_CHAN_HW_STATUS_BITMSK_CH_HALTED)
 			return DMA_PAUSED;
-		if (switchtec_chan_readl(dma_chan, stat) & \
-				SWITCHTEC_DMA_CHAN_HW_STATUS_BITMSK_CH_ERROR_PAUSED)
+		if (chan_stat & SWITCHTEC_DMA_CHAN_HW_STATUS_BITMSK_CH_ERROR_PAUSED)
 			return DMA_ERROR;
 	}
 
@@ -2964,7 +2812,6 @@ static int switchtec_init_dma(struct switchtec_dev *stdev)
 	dma->device_free_chan_resources = dma_free_chan_resources;
 
 	dma->device_prep_dma_memcpy = dma_prep_dma_memcpy;
-	dma->device_prep_slave_sg = dma_prep_slave_sg;
 	dma->device_prep_dma_imm_data = dma_prep_dma_imm_data;
 
 	dma->device_config = dma_config;
