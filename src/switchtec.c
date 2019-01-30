@@ -2998,11 +2998,11 @@ static int switchtec_pci_probe(struct pci_dev *pdev,
 	if (rc)
 		goto err_put;
 
-	rc = switchtec_init_isr(stdev);
-	if (rc) {
-		dev_err(&stdev->dev, "failed to init isr.\n");
-		goto err_put;
-	}
+	//rc = switchtec_init_isr(stdev);
+	//if (rc) {
+	//	dev_err(&stdev->dev, "failed to init isr.\n");
+	//	goto err_put;
+	//}
 
 #if 0
 	iowrite32(SWITCHTEC_EVENT_CLEAR |
