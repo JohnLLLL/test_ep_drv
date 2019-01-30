@@ -3015,9 +3015,9 @@ static int switchtec_pci_probe(struct pci_dev *pdev,
 
 #endif
 
-	rc = switchtec_init_dma(stdev);
-	if (rc)
-		goto err_put;
+	//rc = switchtec_init_dma(stdev);
+	//if (rc)
+	//	goto err_put;
 
 	rc = cdev_add(&stdev->cdev, stdev->dev.devt, 1);
 	if (rc)
@@ -3044,7 +3044,7 @@ static void switchtec_pci_remove(struct pci_dev *pdev)
 {
 	struct switchtec_dev *stdev = pci_get_drvdata(pdev);
 
-	switchtec_uninit_dma(stdev);
+	//switchtec_uninit_dma(stdev);
 
 	pci_set_drvdata(pdev, NULL);
 
