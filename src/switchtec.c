@@ -2862,8 +2862,10 @@ static int switchtec_init_dma(struct switchtec_dev *stdev)
 	if (rc)
 		goto err_dma_register;
 
+#ifdef SWITCHTEC_DMA_REVA
 	/* Toggle the MSIX WA because reva issue */
 	switchtec_writel(stdev, reva_wa, 1);
+#endif
 
 	dev_info(&stdev->dev, "switchtec dma dev\n");
 

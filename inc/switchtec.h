@@ -24,7 +24,7 @@
 #define MICROSEMI_NTB_CLASSCODE     0x068000
 #define MICROSEMI_MGMT_CLASSCODE    0x058000
 
-#define SWITCHTEC_DMA_REVA
+//#define SWITCHTEC_DMA_REVA
 
 #ifdef SWITCHTEC_DMA_REVA
 #define cpu_to_swt_hw_32(val)                           cpu_to_be32(val)
