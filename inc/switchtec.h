@@ -37,10 +37,10 @@
 													cpu_to_swt_hw_32(*(((u32*)(src)) + __i)); \
 											}while(0);
 #else
-#define cpu_to_swt_hw_32(val)
-#define swt_hw_32_to_cpu(val)
+#define cpu_to_swt_hw_32(val)					(val)
+#define swt_hw_32_to_cpu(val)					(val)
 
-#define copy_se_ce_buf(src, dst)
+#define copy_se_ce_buf(src, dst, dw_sz)			do{}while(0);
 #endif
 
 
