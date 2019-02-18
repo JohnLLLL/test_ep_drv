@@ -114,6 +114,7 @@ struct dma_se_cmd {
 } __packed;
 
 struct dma_ce_cpl {
+#ifdef SWITCHTEC_DMA_REVA
 	/* dw0 */
 	u32 rd_im_dw;
 	/* dw1 */
@@ -134,6 +135,28 @@ struct dma_ce_cpl {
 	u32 resv4:16;
 	/* dw7 */
 	u32 resv5;
+#else
+	/* dw0 */
+	u32 rd_im_dw0;
+	/* dw1 */
+	u32 rd_im_dw1;
+	/* dw2 */
+	u32 resv1;
+	/* dw3 */
+	u32 cpl_byte_cnt;
+	/* dw4 */
+	u32 sq_head:16;
+	u32 resv2:16;
+	/* dw5 */
+	u32 resv3;
+	/* dw6 */
+	u32 cpl_stat:16;
+	u32 resv4:16;
+	/* dw5 */
+	u32 cmd_id:16;
+	u32 phase:1;
+	u32 resv5:15;
+#endif
 } __packed;
 
 struct dma_hw_ch_regs {

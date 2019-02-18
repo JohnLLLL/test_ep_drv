@@ -620,8 +620,8 @@ static int dma_chan_recv_cpl(struct switchtec_dma_chan *dma_chan)
 		/* A new cpl */
 		dev_info(dma_dev->dev, "DMA chan[%d] cq head %d, sq size %d\n",
 				chan_id, cq_head, dma_chan->cq_size);
-		dev_info(dma_dev->dev, "DMA chan[%d] cpl[0x%x] return data 0x%x cpl %d sq_head %d\n",
-				chan_id, cpl->cmd_id, cpl->rd_im_dw, cpl->cpl_stat, cpl->sq_head);
+		dev_info(dma_dev->dev, "DMA chan[%d] cpl[0x%x] cpl %d sq_head %d\n",
+				chan_id, cpl->cmd_id, cpl->cpl_stat, cpl->sq_head);
 		dev_info(dma_dev->dev, "DMA chan[%d] cpl[0x%x] raw: 0x%08x 0x%08x 0x%08x 0x%08x 0x%08x 0x%08x 0x%08x 0x%08x",
 				chan_id,
 				cpl->cmd_id,
