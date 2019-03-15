@@ -181,6 +181,13 @@ struct dma_hw_ch_regs {
 
 struct dma_fw_ch_regs {
 	/* FW register per channel - 0x0*/
+#if 0
+	u32 valid:1;
+	u32 enable:1;
+	u32 /*reserved*/:6;
+	u32 max_outstanding_cmd:8;
+	u32 /*reserved*/:16;
+#endif
 	u32 valid;
 	u32 cq_base_lo;
 	u32 cq_base_hi;

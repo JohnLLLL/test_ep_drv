@@ -1058,11 +1058,14 @@ static int dma_alloc_chan_resources(struct dma_chan *chan)
 	/* Setup the config for the burst and max read request size*/
 	switchtec_ch_cfg_writel(dma_chan, cfg, 0x7100);
 
-	/* Release the channel */
-	switchtec_ch_ctrl_writel(dma_chan, ctrl, 0);
-
 	/* Bind the channel to interrupt vector */
 	switchtec_ch_cfg_writel(dma_chan, intv, 0);
+
+	/* Enable the channel */
+	switchtec_ch_cfg_writel(dma_chan, valid, 0xff);
+
+	/* Release the channel */
+	switchtec_ch_ctrl_writel(dma_chan, ctrl, 0);
 
 	dma_chan->used = 1;
 
@@ -2998,11 +3001,11 @@ static int switchtec_pci_probe(struct pci_dev *pdev,
 	if (rc)
 		goto err_put;
 
-	//rc = switchtec_init_isr(stdev);
-	//if (rc) {
-	//	dev_err(&stdev->dev, "failed to init isr.\n");
-	//	goto err_put;
-	//}
+	rc = switchtec_init_isr(stdev);
+	if (rc) {
+		dev_err(&stdev->dev, "failed to init isr.\n");
+		goto err_put;
+	}
 
 #if 0
 	iowrite32(SWITCHTEC_EVENT_CLEAR |
@@ -3015,9 +3018,9 @@ static int switchtec_pci_probe(struct pci_dev *pdev,
 
 #endif
 
-	//rc = switchtec_init_dma(stdev);
-	//if (rc)
-	//	goto err_put;
+	rc = switchtec_init_dma(stdev);
+	if (rc)
+		goto err_put;
 
 	rc = cdev_add(&stdev->cdev, stdev->dev.devt, 1);
 	if (rc)
@@ -3044,7 +3047,7 @@ static void switchtec_pci_remove(struct pci_dev *pdev)
 {
 	struct switchtec_dev *stdev = pci_get_drvdata(pdev);
 
-	//switchtec_uninit_dma(stdev);
+	switchtec_uninit_dma(stdev);
 
 	pci_set_drvdata(pdev, NULL);
 
