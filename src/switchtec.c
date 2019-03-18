@@ -2035,7 +2035,7 @@ struct filter_param {
 static bool switchtec_dma_filter(struct dma_chan *chan, void *filter_param)
 {
 	struct filter_param *filter = (struct filter_param *)filter_param;
-	printk("johnlu search dma chan %s", dev_name(chan->device->dev));
+	printk("johnlu search dma chan %s\n", dev_name(chan->device->dev));
 	if (chan->device->dev == &filter->stdev->pdev->dev ) {
 		struct switchtec_dma_chan *dma_chan = to_st_dma_chan(chan);
 		if (dma_chan == &filter->stdev->dma_ch[filter->chan_id])
