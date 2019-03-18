@@ -963,8 +963,10 @@ static int dma_alloc_chan_resources(struct dma_chan *chan)
 {
 	struct switchtec_dma_chan *dma_chan = to_st_dma_chan(chan);
 	struct dma_device *dma_dev = dma_chan->chan.device;
+	struct switchtec_dev *stdev= dma_dev_to_stdev(dma_dev);
 	dma_addr_t dma_addr;
 	int i, err;
+	int chan_id;
 
 	if (dma_chan->used) {
 		dev_info(dma_dev->dev, "DMA channel %d allocated?\n", dma_chan_id(dma_chan));
@@ -1069,8 +1071,12 @@ static int dma_alloc_chan_resources(struct dma_chan *chan)
 
 	dma_chan->used = 1;
 
+	/* Unit test stub*/
+	chan_id = dma_chan_id(dma_chan);
+	stdev->test_chan[chan_id] = &dma_chan->chan;
+
 	dev_info(dma_dev->dev, "DMA channel%d setup cq %p, sq %p\n",
-			dma_chan_id(dma_chan), (void*)dma_chan->cq_dma_base,
+			chan_id, (void*)dma_chan->cq_dma_base,
 			(void*)dma_chan->sq_dma_base);
 
 	return DMA_CHANNEL_DESC_NUM;
@@ -1087,8 +1093,10 @@ err_free_desc:
 
 static void dma_free_chan_resources(struct dma_chan *chan)
 {
+	int chan_id;
 	struct switchtec_dma_chan *dma_chan = to_st_dma_chan(chan);
 	struct dma_device *dma_dev = dma_chan->chan.device;
+	struct switchtec_dev *stdev= dma_dev_to_stdev(dma_dev);
 
 	if (dma_chan->used) {
 
@@ -1102,7 +1110,11 @@ static void dma_free_chan_resources(struct dma_chan *chan)
 
 		dma_chan->used = 0;
 
-		dev_info(dma_dev->dev, "DMA channel%d clean up\n", dma_chan_id(dma_chan));
+		/*Unit test stub*/
+		chan_id = dma_chan_id(dma_chan);
+		stdev->test_chan[chan_id] = NULL;
+
+		dev_info(dma_dev->dev, "DMA channel%d clean up\n", chan_id);
 	}
 
 	return ;
@@ -2023,6 +2035,7 @@ struct filter_param {
 static bool switchtec_dma_filter(struct dma_chan *chan, void *filter_param)
 {
 	struct filter_param *filter = (struct filter_param *)filter_param;
+	printk("johnlu search dma chan %s", dev_name(chan->device->dev));
 	if (chan->device->dev == &filter->stdev->pdev->dev ) {
 		struct switchtec_dma_chan *dma_chan = to_st_dma_chan(chan);
 		if (dma_chan == &filter->stdev->dma_ch[filter->chan_id])
@@ -2056,11 +2069,11 @@ static int ioctl_dma_chan_cfg(struct switchtec_dev *stdev,
 		case SWITCHTEC_DMA_CHAN_INIT:
 			if (dma_ch_cfg.op)
 			{
-				if (stdev->test_chan != NULL)
+				if (stdev->test_chan[dma_ch_cfg.chan_id] != NULL)
 				{
+					printk("john lu alloced dma chan %d\n", dma_ch_cfg.chan_id);
 					return 0;
 				}
-				//return dma_alloc_chan_resources(&dma_chan->chan);
 				dma_cap_zero(mask);
 				dma_cap_set(DMA_MEMCPY, mask);
 
@@ -2071,21 +2084,24 @@ static int ioctl_dma_chan_cfg(struct switchtec_dev *stdev,
 				 */
 				filter.stdev = stdev;
 				filter.chan_id = dma_ch_cfg.chan_id;
-				stdev->test_chan = dma_request_channel(mask,
-						switchtec_dma_filter, (void*)&filter);
+				dma_request_channel(mask, switchtec_dma_filter, (void*)&filter);
 
 				return 0;
 			}
 			else
 			{
-				dma_release_channel(stdev->test_chan);
-				stdev->test_chan = NULL;
+				if (stdev->test_chan[dma_ch_cfg.chan_id] == NULL)
+				{
+					printk("john lu freed dma chan %d\n", dma_ch_cfg.chan_id);
+					return 0;
+				}
+				dma_release_channel(stdev->test_chan[dma_ch_cfg.chan_id]);
 				return 0;
 			}
 		case SWITCHTEC_DMA_CHAN_PAUSE:
-			return dmaengine_pause(stdev->test_chan);
+			return dmaengine_pause(stdev->test_chan[dma_ch_cfg.chan_id]);
 		case SWITCHTEC_DMA_CHAN_RESUME:
-			return dmaengine_resume(stdev->test_chan);
+			return dmaengine_resume(stdev->test_chan[dma_ch_cfg.chan_id]);
 		case SWITCHTEC_DMA_CHAN_CH_HALT:
 			return dma_chan_halt(dma_chan, dma_ch_cfg.op);
 		case SWITCHTEC_DMA_CHAN_RESET:
@@ -2126,7 +2142,10 @@ static int ioctl_dma_memcpy(struct switchtec_dev *stdev,
 	if (!(dma_cmd.src_addr < PAGE_SIZE))
 		return -EINVAL;
 
-	chan = stdev->test_chan;
+	if (stdev->dma.chancnt <= dma_cmd.chan_id )
+		return -EINVAL;
+
+	chan = stdev->test_chan[dma_cmd.chan_id];
 	dma_chan = to_st_dma_chan(chan);
 	dma_dev = chan->device;
 	flags =  DMA_PREP_INTERRUPT | DMA_CTRL_ACK ;
@@ -2180,7 +2199,10 @@ static int ioctl_dma_imm_data(struct switchtec_dev *stdev,
 	if (!(cmd.dst_addr < PAGE_SIZE))
 		return -EINVAL;
 
-	chan = stdev->test_chan;
+	if (stdev->dma.chancnt <= cmd.chan_id )
+		return -EINVAL;
+
+	chan = stdev->test_chan[cmd.chan_id];
 	dma_chan = to_st_dma_chan(chan);
 	dma_dev = chan->device;
 	flags =  DMA_PREP_INTERRUPT | DMA_CTRL_ACK ;
@@ -2399,9 +2421,14 @@ static void stdev_kill(struct switchtec_dev *stdev)
 
 	pci_clear_master(stdev->pdev);
 
+	/*TODO: kill the outstanding DMA task*/
+
 	for(i = 0; i < stdev->dma.chancnt; ++i) {
 		dma_free_chan_resources(&stdev->dma_ch[i].chan);
 	}
+
+	devm_kfree(&stdev->dev, stdev->test_chan);
+	devm_kfree(&stdev->dev, stdev->dma_ch);
 
 #if 0
 	cancel_delayed_work_sync(&stdev->mrpc_timeout);
@@ -2842,6 +2869,15 @@ static int switchtec_init_dma(struct switchtec_dev *stdev)
 	if (!stdev->dma_ch)
 		return -ENOMEM;
 
+	/* Unit test stub */
+	stdev->test_chan = (struct dma_chan **)devm_kcalloc(&stdev->dev,
+			chan_num, sizeof(struct dma_chan *),
+			GFP_KERNEL);
+	if (!stdev->dma_ch) {
+		rc = -ENOMEM;
+		goto err_free_dma_ch;
+	}
+
 	INIT_LIST_HEAD(&dma->channels);
 	for (i = 0; i < chan_num; i++) {
 		struct switchtec_dma_chan *dma_ch = &stdev->dma_ch[i];
@@ -2885,8 +2921,10 @@ static int switchtec_init_dma(struct switchtec_dev *stdev)
 	return 0;
 
 err_dma_register:
-
 	dev_err(&stdev->dev, "failed register dma dev\n");
+	devm_kfree(&stdev->dev, stdev->test_chan);
+err_free_dma_ch:
+	devm_kfree(&stdev->dev, stdev->dma_ch);
 	return rc;
 }
 

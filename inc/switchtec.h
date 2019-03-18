@@ -336,9 +336,8 @@ struct switchtec_dev {
 	void __iomem *mmio;
 	struct switchtec_dma_chan *dma_ch;
 
-
 	/*Unit test*/
-	struct dma_chan *test_chan;
+	struct dma_chan **test_chan;
 #if 0
 	unsigned int event_irq;
 	unsigned int dma_mrpc_irq;
@@ -397,6 +396,11 @@ static inline struct dma_fw_regs __iomem * __fw_reg(struct switchtec_dev *sw)
 static inline struct switchtec_dev *to_stdev(struct device *dev)
 {
 	return container_of(dev, struct switchtec_dev, dev);
+}
+
+static inline struct switchtec_dev *dma_dev_to_stdev(struct dma_device *dev)
+{
+	return container_of(dev, struct switchtec_dev, dma);
 }
 
 extern struct class *switchtec_dma_class;
