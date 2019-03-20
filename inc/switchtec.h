@@ -179,16 +179,33 @@ struct dma_hw_ch_regs {
 #define SWITCHTEC_DMA_CHAN_FW_CFG_BITMSK_BURST_INTERVAL				(0x700)
 #define SWITCHTEC_DMA_CHAN_FW_CFG_BITMSK_BURST_SZ					(0x7000)
 
+
+#define DMA_FW_CHANNEL_CFG_REG_VALID_DW_OFF                                  (0)
+#define DMA_FW_CHANNEL_CFG_REG_VALID_BITMSK_VALID                   (0x00000001)
+#define DMA_FW_CHANNEL_CFG_REG_VALID_BITOFF_VALID                            (0)
+#define DMA_FW_CHANNEL_CFG_REG_VALID_BITMSK_ENABLE                  (0x00000002)
+#define DMA_FW_CHANNEL_CFG_REG_VALID_BITOFF_ENABLE                           (1)
+#define DMA_FW_CHANNEL_CFG_REG_VALID_BITMSK_SE_BUF_LEN              (0x000ff000)
+#define DMA_FW_CHANNEL_CFG_REG_VALID_BITOFF_SE_BUF_LEN                      (12)
+#define DMA_FW_CHANNEL_CFG_REG_VALID_BITMSK_SE_THRESHOLD            (0xff800000)
+#define DMA_FW_CHANNEL_CFG_REG_VALID_BITOFF_SE_THRESHOLD                    (23)
+
+
+#define DMA_FW_CHANNEL_CFG_REG_TRANSFER_SET_DW_OFF                           (8)
+#define DMA_FW_CHANNEL_CFG_REG_TRANSFER_SET_BITMSK_BURST_SCALE      (0x0000000c)
+#define DMA_FW_CHANNEL_CFG_REG_TRANSFER_SET_BITOFF_BURST_SCALE               (2)
+#define DMA_FW_CHANNEL_CFG_REG_TRANSFER_SET_BITMSK_MRRS             (0x00000070)
+#define DMA_FW_CHANNEL_CFG_REG_TRANSFER_SET_BITOFF_MRRS                      (4)
+#define DMA_FW_CHANNEL_CFG_REG_TRANSFER_SET_BITMSK_INTERVAL         (0x00000700)
+#define DMA_FW_CHANNEL_CFG_REG_TRANSFER_SET_BITOFF_INTERVAL                  (8)
+#define DMA_FW_CHANNEL_CFG_REG_TRANSFER_SET_BITMSK_BURST_SIZE       (0x00007000)
+#define DMA_FW_CHANNEL_CFG_REG_TRANSFER_SET_BITOFF_BURST_SIZE               (12)
+#define DMA_FW_CHANNEL_CFG_REG_TRANSFER_SET_BITMSK_ARB_WEIGHT       (0xff000000)
+#define DMA_FW_CHANNEL_CFG_REG_TRANSFER_SET_BITOFF_ARB_WEIGHT               (24)
+
 struct dma_fw_ch_regs {
 	/* FW register per channel - 0x0*/
-#if 0
-	u32 valid:1;
-	u32 enable:1;
-	u32 /*reserved*/:6;
-	u32 max_outstanding_cmd:8;
-	u32 /*reserved*/:16;
-#endif
-	u32 valid;
+	u32 cfg;
 	u32 cq_base_lo;
 	u32 cq_base_hi;
 	u32 cq_size;
@@ -196,8 +213,8 @@ struct dma_fw_ch_regs {
 	u32 sq_base_hi;
 	u32 sq_size;
 	u32 intv;
-	u32 arb_weight;
-	u32 cfg;
+	u32 trans_set;
+	u32 ch_stat;
 	u32 resv0[22];
 } __packed;
 

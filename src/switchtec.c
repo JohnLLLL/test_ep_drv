@@ -1054,17 +1054,17 @@ static int dma_alloc_chan_resources(struct dma_chan *chan)
 	switchtec_ch_cfg_writel(dma_chan, sq_base_lo, (u32)dma_addr);
 	switchtec_ch_cfg_writel(dma_chan, sq_base_hi, (u32)(dma_addr>>32));
 
-	/* Setup the weight round robin value */
-	switchtec_ch_cfg_writel(dma_chan, arb_weight, 0x01);
+	/* Setup the weight round robin value,
+	 *  the burst and max read request size */
+	switchtec_ch_cfg_writel(dma_chan, trans_set,
+		0x01007111);
 
-	/* Setup the config for the burst and max read request size*/
-	switchtec_ch_cfg_writel(dma_chan, cfg, 0x7100);
 
 	/* Bind the channel to interrupt vector */
 	switchtec_ch_cfg_writel(dma_chan, intv, 0);
 
-	/* Enable the channel */
-	switchtec_ch_cfg_writel(dma_chan, valid, 0xff);
+	/* Enable the channel. Set the SE length to 4 */
+	switchtec_ch_cfg_writel(dma_chan, cfg, 0xff804003);
 
 	/* Release the channel */
 	switchtec_ch_ctrl_writel(dma_chan, ctrl, 0);
