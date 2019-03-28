@@ -2129,13 +2129,14 @@ static struct test_dma_elem unit_test;
 
 static void dma_complete_func(void *arg)
 {
+	int i;
 	struct test_dma_elem *elemd = arg;
 	printk("johnlu finished %d\n", elemd->txd->cookie);
 	printk("src:");
-	for(int i = 0; i < elemd->len; i++)
+	for(i = 0; i < elemd->len; i++)
 		printk("%d ",*((u8*)elemd->src_buf + i));
 	printk("dst:");
-	for(int i = 0; i < elemd->len; i++)
+	for(i = 0; i < elemd->len; i++)
 		printk("%d ",*((u8*)elemd->tgt_buf + i));
     complete(&elemd->compl);
 }
@@ -2179,11 +2180,11 @@ static int ioctl_dma_memcpy(struct switchtec_dev *stdev,
 		return -1;
 	}
 
-	init_completion(&unit_test->compl);
-	unit_test->txd = txd;
-	unit_test->src_buf = dma_chan->src_test_buf + dma_cmd.src_addr;
-	unit_test->tgt_buf = dma_chan->dst_test_buf + dma_cmd.dst_addr;
-	unit_test->len = 0x10;
+	init_completion(&unit_test.compl);
+	unit_test.txd = txd;
+	unit_test.src_buf = dma_chan->src_test_buf + dma_cmd.src_addr;
+	unit_test.tgt_buf = dma_chan->dst_test_buf + dma_cmd.dst_addr;
+	unit_test.len = 0x10;
 
 	txd->callback = dma_complete_func;
 	txd->callback_param = &unit_test;
@@ -2196,7 +2197,7 @@ static int ioctl_dma_memcpy(struct switchtec_dev *stdev,
 
 	dma_async_issue_pending(chan);
 
-	wait_for_completion(&unit_test->compl);
+	wait_for_completion(&unit_test.compl);
 
 	return 0;
 }
