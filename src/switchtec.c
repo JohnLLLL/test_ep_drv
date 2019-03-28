@@ -2115,13 +2115,29 @@ static int ioctl_dma_chan_cfg(struct switchtec_dev *stdev,
 	return 0;
 }
 
-//static struct completion comp1;
+
+
+static struct test_dma_elem {
+	struct dma_async_tx_descriptor *txd;
+	void* src_buf;
+	void* tgt_buf;
+	size_t len;
+	struct completion compl;
+};
+
+static struct test_dma_elem unit_test;
 
 static void dma_complete_func(void *arg)
 {
-	struct dma_async_tx_descriptor *txd = arg;
-	printk("johnlu finished %d\n", txd->cookie);
-//    complete(completion);
+	struct test_dma_elem *elemd = arg;
+	printk("johnlu finished %d\n", elemd->txd->cookie);
+	printk("src:");
+	for(int i = 0; i < elemd->len; i++)
+		printk("%d ",*((u8*)elemd->src_buf + i));
+	printk("dst:");
+	for(int i = 0; i < elemd->len; i++)
+		printk("%d ",*((u8*)elemd->tgt_buf + i));
+    complete(&elemd->compl);
 }
 
 static int ioctl_dma_memcpy(struct switchtec_dev *stdev,
@@ -2154,15 +2170,23 @@ static int ioctl_dma_memcpy(struct switchtec_dev *stdev,
 	txd = dma_dev->device_prep_dma_memcpy(chan, dma_chan->src_test_base + dma_cmd.src_addr,
 			dma_chan->dst_test_base + dma_cmd.dst_addr, 0x10, flags);
 
+	/* Initialize the test buffer */
+	memset(dma_chan->src_test_buf + dma_cmd.src_addr, 0xa5, 0x10);
+	memset(dma_chan->dst_test_buf + dma_cmd.dst_addr, 0, 0x10);
+
 	 if (!txd) {
 		dev_info(&stdev->dev, "Failed to prepare DMA memcpy\n");
 		return -1;
 	}
 
-//	init_completion(&comp1);
+	init_completion(&unit_test->compl);
+	unit_test->txd = txd;
+	unit_test->src_buf = dma_chan->src_test_buf + dma_cmd.src_addr;
+	unit_test->tgt_buf = dma_chan->dst_test_buf + dma_cmd.dst_addr;
+	unit_test->len = 0x10;
+
 	txd->callback = dma_complete_func;
-	txd->callback_param = txd;
-//	txd->callback_param = &comp1;
+	txd->callback_param = &unit_test;
 
 	cookie = txd->tx_submit(txd);
 	if (dma_submit_error(cookie)) {
@@ -2172,7 +2196,7 @@ static int ioctl_dma_memcpy(struct switchtec_dev *stdev,
 
 	dma_async_issue_pending(chan);
 
-//	wait_for_completion(&comp1);
+	wait_for_completion(&unit_test->compl);
 
 	return 0;
 }
