@@ -760,11 +760,10 @@ dma_prep_dma_memcpy(struct dma_chan *chan, dma_addr_t dst, dma_addr_t src,
 	desc->cmd.dst_addr_hi = (u32)(dst>>32);
 	desc->cmd.byte_cnt = len;
 	desc->cmd.liof = 1;
-#if 0
-#else
+
 	/* Set the loop back command */
-	desc->cmd.opc = 0x7;
-#endif
+	desc->cmd.opc = 0x0;
+
 	desc->cmd.cmd_id = (desc - dma_chan->dma_desc);
 
 	return &desc->txd;
@@ -1040,8 +1039,8 @@ static int dma_alloc_chan_resources(struct dma_chan *chan)
 	dma_chan->sq_dma_base = phys_to_dma(dma_dev->dev, virt_to_phys(dma_chan->sq_base));
 
 	/* Keep the dma channel in reset while config */
-	switchtec_ch_ctrl_writel(dma_chan, ctrl,
-			SWITCHTEC_DMA_CHAN_HW_CTRL_BITMSK_CH_RESET);
+	//switchtec_ch_ctrl_writel(dma_chan, ctrl,
+	//		SWITCHTEC_DMA_CHAN_HW_CTRL_BITMSK_CH_RESET);
 
 	/* Setup the submit queue and completion queue */
 	dma_addr = dma_chan->cq_dma_base;
@@ -1066,6 +1065,9 @@ static int dma_alloc_chan_resources(struct dma_chan *chan)
 	/* Enable the channel. Set the SE length to 4 */
 	switchtec_ch_cfg_writel(dma_chan, cfg, 0xff804003);
 
+	/* Toggle the reset to enable the channel */
+	switchtec_ch_ctrl_writel(dma_chan, ctrl,
+			SWITCHTEC_DMA_CHAN_HW_CTRL_BITMSK_CH_RESET);
 	/* Release the channel */
 	switchtec_ch_ctrl_writel(dma_chan, ctrl, 0);
 

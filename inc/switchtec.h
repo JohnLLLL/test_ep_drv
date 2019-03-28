@@ -30,18 +30,17 @@
 #define cpu_to_swt_hw_32(val)                           cpu_to_be32(val)
 #define swt_hw_32_to_cpu(val)                           be32_to_cpu(val)
 
-#define copy_se_ce_buf(src, dst, dw_sz)			do{\
-												typeof(dw_sz) __i; \
-												for(__i = 0; __i < (dw_sz); ++__i)\
-													*(((u32*)(dst)) + __i) = \
-													cpu_to_swt_hw_32(*(((u32*)(src)) + __i)); \
-											}while(0);
 #else
 #define cpu_to_swt_hw_32(val)					(val)
 #define swt_hw_32_to_cpu(val)					(val)
-
-#define copy_se_ce_buf(src, dst, dw_sz)			do{}while(0);
 #endif
+
+#define copy_se_ce_buf(src, dst, dw_sz)			do{\
+													typeof(dw_sz) __i; \
+													for(__i = 0; __i < (dw_sz); ++__i)\
+														*(((u32*)(dst)) + __i) = \
+														cpu_to_swt_hw_32(*(((u32*)(src)) + __i)); \
+												}while(0);
 
 
 /* The supported bus width by the DMA controller */
