@@ -10,7 +10,8 @@ ccflags-y += -I$(LDDINC) -I../common
 ifneq ($(KERNELRELEASE),)
 # call from kernel build system
 
-dma_drv-objs := dma_test_drv.o 
+#dma_drv-objs := dma_test_drv.o 
+dma_drv-objs := switchtec.o 
 
 obj-m	:= dma_drv.o
 
